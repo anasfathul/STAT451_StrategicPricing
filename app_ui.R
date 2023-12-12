@@ -19,65 +19,9 @@ options(dplyr.summarise.inform = FALSE) # turns off an annoying dplyr behavior
 
 set.seed(487)
 
-co2_emission_data <- 
-  read.csv("https://raw.githubusercontent.com/owid/co2-data/master/owid-co2-data.csv")
 
 oj_df <- read_csv("oj.csv", show_col_types = FALSE) %>% clean_names()
 
-# Extracting the data by country and feature
-countries <- co2_emission_data %>% distinct(country) %>% pull(country)
-
-features <- colnames(co2_emission_data)
-
-datamod <- co2_emission_data %>% filter(year >= 1900)
-
-date_range <- range(datamod$year)
-
-# Setting the feature and widget
-sidebar_country <- selectInput(inputId = "varcountry",
-                               label = "Pick a country",
-                               choices = countries)
-
-
-sidebar_feature <- selectInput(
-  inputId = "varfeature",
-  label = "Pick one of the feature",
-  choices =
-    list("Annual production of Carbon Dioxide" = "co2",
-         "Consumption-based Carbon Dioxide" = "consumption_co2",
-         "Cumulative Emission of Carbon Dioxide" = "cumulative_co2",
-         "Carbon Dioxide per Capita" = "co2_per_capita",
-         "Difference of Carbon Dioxide between Import and Export" = "trade_co2")
-)
-
-
-sidebar_date <- sliderInput(
-  inputId = "date",
-  label = "Date range",
-  min = date_range[1],
-  max = date_range[2],
-  value = c(1950, 2015),
-  sep = ""
-)
-
-
-graph_main_content <- mainPanel(plotlyOutput(
-  outputId = "graph",
-  width = "150%")
-)
-
-graph_panel <- tabPanel(
-  "Graphical View",
-  titlePanel("Emission of CO2 by country based on feature and years"),
-  p(textOutput("intro_graph")),
-  sidebarLayout(
-    sidebarPanel(sidebar_country,
-                 sidebar_feature,
-                 sidebar_date,
-                 width = 20),
-    mainPanel(graph_main_content, width = 100)),
-  p(textOutput("summary"))
-)
 
 ### Data Overview Panel
 
@@ -143,8 +87,13 @@ overview_panel <- tabPanel(
   linear_regression <- tabPanel(
     "Linear Regression",
     p(
-      "We will use a simple linear regression model to show how the price elasticities vary by brand.
-      The question is how would we choose the variables in our linear model?"
+      "We will use a simple linear regression model to demonstrate how price elasticities vary across different brands.
+      In selecting variables for our linear model, we consider factors that significantly impact price elasticity.
+      To ensure the robustness of our model, we employ a 5-fold cross-validation technique.
+      This approach involves splitting the data into five parts, using each part in turn for validation while training the model on the remaining four parts.
+      By doing so, we can effectively evaluate the model's performance and calculate the mean squared error (MSE) across different subsets of data,
+      ensuring a more reliable and generalizable assessment of our model's accuracy.
+      The question is how would we choose the variables in our linear model and how would our model perform in term of MSE?"
     ),
     
     titlePanel("Model Complexity Selection"),
@@ -153,56 +102,135 @@ overview_panel <- tabPanel(
       sidebarPanel(
         selectInput("model_complexity", "Choose Model Complexity:",
                     choices = c("linear regression by brand",
-                                "linear regression by brand with interaction"))
+                                "linear regression by brand with interaction",
+                                "general linear regression",
+                                "linear regression by brand with features"))
       ),
       mainPanel(
+        uiOutput("modelFormula"),
         plotOutput("lmPlot"),
-        uiOutput("modelFormula")
+        htmlOutput("lmTable")
       )
     )
   )
   
-### K-fold Cross Validation Panel
-  
-  k_fold_CV <- tabPanel(
-    "K-fold Cross Validation",
-    p(
-      "Now, instead of using all of our dataset to predict our quantity sold by each brand,
-      we will split our dataset into train and test data set. In this page, the user could choose the number of folds for the cross validation.
-      And then, we can see the average MSE of all the folds choosen.
-      The question is how many fold will be sufficient for our cross validation?"
-    ),
-    
-    titlePanel("Model complexity")
-  )
-
-### Regression Tree Panel
-  
-  regression_tree <- tabPanel(
-    "Regression Tree",
-    p(
-      "In this section of our analysis, we will focus on building a regression tree model to predict a specific target variable.
-      To ensure the robustness of our model, we'll divide our dataset into training and testing subsets.
-      Users will have the flexibility to select the depth of the tree, which influences the complexity of the model.
-      Additionally, we will implement cross-validation to evaluate the model's performance.
-      The key aspect here is determining the optimal number of folds for cross-validation to obtain a reliable estimate of the model's performance.
-      The interface will display the mean squared error (MSE) across different folds,
-      aiding in deciding the most effective number of folds for our regression tree model"
-    ),
-    
-    titlePanel("Regression Tree")
-  )
-  
-### LASSO and Ridge Panel
+  ### LASSO and Ridge Panel
   
   lasso_ridge <- tabPanel(
     "LASSO and Ridge regression",
     p(
-      "In this section of our analysis, we will focus on building a."
+      "This segment of our analysis introduces LASSO (Least Absolute Shrinkage and Selection Operator) and Ridge regression techniques,
+      both pivotal in refining our linear regression models. LASSO, renowned for its ability to perform feature selection,
+      applies L1 regularization which can shrink some coefficients to zero, effectively removing less significant variables from the model.
+      This trait makes LASSO an excellent tool for models plagued by high-dimensionality or when aiming to enhance model interpretability by reducing the number of predictors.
+      On the other hand, Ridge regression employs L2 regularization, which penalizes the size of the coefficients but doesn't set them to zero.
+      This approach is particularly beneficial in handling multicollinearity, where predictor variables are highly correlated.
+      In this interactive module, users can experiment with varying degrees of LASSO and Ridge penalties to observe their impact on feature selection and model accuracy.
+      The central question we address here is:
+      'How do LASSO and Ridge regression affect the selection of features in our linear model, and what balance of these techniques yields the most effective and interpretable model for predicting orange juice sales?'"
     ),
     
-    titlePanel("LASSO"),
-    titlePanel("Ridge")
+    titlePanel("Ridge"),
+    sidebarLayout(
+      sidebarPanel(
+        selectInput("selectedPlot", "Choose Plot:",
+                    choices = c("Cross-Validation Plot" = "cv_plot",
+                                "Coefficient Path Plot" = "glm_plot"))
+      ),
+      mainPanel(
+        plotOutput("lassoRidge"),
+        uiOutput("plotTextLasso")
+      )
+    ),
+    titlePanel("LASSO Analysis"),
+    p(
+      "In this section, we delve into the LASSO (Least Absolute Shrinkage and Selection Operator) model to identify which parameters are ",
+      strong("excluded"), " as a result of LASSO regularization.
+      Pinpointing these parameters allows us to gain insights into the most impactful predictors, enabling the construction of a more efficient and targeted model.
+      This analysis facilitates the exclusion of non-contributing parameters, thereby enhancing the overall model effectiveness."
+    ),
+    htmlOutput("lassoTable")
+  )
+  
+  ### Regression Tree Panel
+  
+  regression_tree <- tabPanel(
+    "Regression Tree",
+    p(
+      "This section of our analysis explores the use of Regression Trees, a powerful non-linear modeling technique that is part of the decision tree family.
+      Unlike linear models, Regression Trees segment the predictor space into distinct and non-overlapping regions, making them particularly adept at capturing complex, non-linear relationships between variables.
+      Each 'split' in a Regression Tree represents a decision rule that is intuitively understandable, which makes these models highly interpretable.
+      A key aspect of Regression Trees is their ability to handle a mix of numerical and categorical variables and automatically model interactions between predictors.
+      However, one challenge with Regression Trees is determining the optimal complexity.
+      Too simple, and the model may underfit; too complex, and it risks overfitting.
+      Question to explore: How does the complexity parameter influence the structure and predictions of the regression tree model for our dataset?
+      Experiment with different values of the complexity parameter using the slider. 
+      Observe how the tree structure changes with varying levels of complexity. 
+      Can you identify a complexity level that provides a balance between a too simplistic and an overly complex tree? 
+      Consider how the depth and number of splits in the tree impact its ability to accurately predict the target variable without overfitting to the training data"
+    ),
+    
+    titlePanel("Regression Tree"),
+    
+    sidebarLayout(
+      sidebarPanel(
+        # Slider for selecting tree complexity
+        sliderInput("treeComplexity", "Select Tree Complexity:",
+                    min = 0.001, max = 0.009, value = 0.007, step = 0.001)
+      ),
+      mainPanel(
+        plotOutput("regressionTreePlot")
+      )
+    ),
+    titlePanel("Regression Tree MSE Calculation"),
+    p(
+      "Feel free to choose a variable and a split point to calculate the MSE of the regression tree model."
+    ),
+    sidebarLayout(
+      sidebarPanel(
+        # Dropdown for selecting the variable
+        selectInput("treeVariable", "Select Variable:",
+                    choices = c("age60", "educ", "ethnic", "hhlarge", "workwom", "hval150")),
+        
+        # Input for specifying the split point
+        numericInput("treeSplit", "Enter Split Point:", 
+                     value = 0.007,
+                     min = 0.001, 
+                     max = 0.009,
+                     step = 0.01) # Adjust step size as appropriate for your data
+      ),
+      
+      mainPanel(
+        textOutput("mse_regressionTree") # Placeholder for MSE output
+      )
+    ),
+    titlePanel("Regression Tree Complexity Visualization"),
+    p(
+      "This visualization presents a series of lines, each corresponding to a different variable in the dataset, with varying colors for clarity.
+      The y-axis represents the mean squared error (MSE), and the x-axis displays the range of potential split point values.
+      This plot is instrumental in understanding how the regression tree model determines the optimal split points for different variables.
+      It illustrates the impact of each variable's split point on the model's predictive accuracy, guiding us in identifying the most effective variables and their respective split points for tree construction."
+    ),
+    mainPanel(
+      plotOutput("treeComplexityDesc")
+    )
+  )
+  
+### random_forest and xgboost
+  
+  random_forest <- tabPanel(
+    "Random Forest Model & XGBoost",
+    p(
+      "In this section, we delve into the application of Random Forest models for predicting orange juice sales across different brands.
+      Unlike a single decision tree, a Random Forest model combines multiple decision trees to improve prediction accuracy and reduce overfitting.
+      Here, users can adjust key parameters of the Random Forest, such as the number of trees in the forest and the maximum depth of each tree.
+      The goal is to find the optimal combination of these parameters that yields the lowest Mean Squared Error (MSE).
+      By experimenting with these settings, users can observe how the complexity of the model affects its performance.
+      The underlying question we aim to explore is:
+      'What are the optimal parameters for a Random Forest model to accurately predict orange juice sales, and how do these parameters influence the model's accuracy and generalizability?"
+    ),
+    
+    titlePanel("Model complexity")
   )
 
 ### Double Machine Learning Panel
@@ -210,7 +238,7 @@ overview_panel <- tabPanel(
   double_machine_learning <- tabPanel(
     "Double Machine Learning",
     p(
-      "In this section of our analysis, we will focus on building a."
+      "Double Machine Learning for causal inference."
     ),
     
     titlePanel("Double Machine Learning")
@@ -221,9 +249,9 @@ ui <- navbarPage(
   "Strategic Pricing",
   overview_panel,
   linear_regression,
-  k_fold_CV,
-  regression_tree,
   lasso_ridge,
+  regression_tree,
+  random_forest,
   double_machine_learning
   #graph_panel
 )
